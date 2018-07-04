@@ -419,13 +419,9 @@ namespace golos { namespace chain {
             share_type claim_rshare_reward(share_type rshares, uint16_t reward_weight, asset max_steem);
 
             asset get_liquidity_reward() const;
-
             asset get_content_reward() const;
-
-            asset get_producer_reward();
-
+            asset get_producer_reward() const;
             asset get_curation_reward() const;
-
             asset get_pow_reward() const;
 
             uint16_t get_curation_rewards_percent() const;

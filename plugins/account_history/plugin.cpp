@@ -324,6 +324,10 @@ if( options.count(name) ) { \
             impacted.insert(op.author);
         }
 
+        void operator()(const producer_reward_operation& op) {
+            impacted.insert(op.producer);
+        }
+
         void operator()(const delegate_vesting_shares_operation& op) {
             impacted.insert(op.delegator);
             impacted.insert(op.delegatee);

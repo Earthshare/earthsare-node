@@ -2376,8 +2376,11 @@ namespace golos { namespace chain {
         *  This method pays out vesting, reward shares and witnesses every block.
         */
         void database::process_funds() {
-            const auto &props = get_dynamic_global_properties();
-            const auto &wso = get_witness_schedule_object();
+            const auto& wso = get_witness_schedule_object();
+            const auto& props = get_dynamic_global_properties();
+            const auto& cwit = get_witness(props.current_witness);
+            const auto& wacc = get_account(cwit.owner);
+            optional<asset> producer_reward;
 
             if (has_hardfork(STEEMIT_HARDFORK_0_16__551)) {
                 /**
@@ -2404,8 +2407,6 @@ namespace golos { namespace chain {
                         (new_steem * STEEMIT_VESTING_FUND_PERCENT) /
                         STEEMIT_100_PERCENT; /// 26.67% to vesting fund
                 auto witness_reward = new_steem - content_reward - vesting_reward; /// Remaining 6.66% to witness pay
-
-                const auto &cwit = get_witness(props.current_witness);
                 witness_reward *= STEEMIT_MAX_WITNESSES;
 
                 if (cwit.schedule == witness_object::timeshare) {
@@ -2429,13 +2430,21 @@ namespace golos { namespace chain {
                     p.virtual_supply += asset(new_steem, STEEM_SYMBOL);
                 });
 
-                create_vesting(get_account(cwit.owner), asset(witness_reward, STEEM_SYMBOL));
+                producer_reward = create_vesting(wacc, asset(witness_reward, STEEM_SYMBOL));
             } else {
+                auto witness_pay = get_producer_reward();
+                /// pay witness in vesting shares
+                if (props.head_block_number >= STEEMIT_START_MINER_VOTING_BLOCK || (wacc.vesting_shares.amount == 0)) {
+                    producer_reward = create_vesting(wacc, witness_pay);
+                } else {
+                    modify(wacc, [&](account_object &a) {
+                        a.balance += witness_pay;
+                    });
+                }
+
                 auto content_reward = get_content_reward();
                 auto curate_reward = get_curation_reward();
-                auto witness_pay = get_producer_reward();
                 auto vesting_reward = content_reward + curate_reward + witness_pay;
-
                 content_reward = content_reward + curate_reward;
 
                 if (props.head_block_number < STEEMIT_START_VESTING_BLOCK) {
@@ -2444,13 +2453,16 @@ namespace golos { namespace chain {
                     vesting_reward.amount.value *= 9;
                 }
 
-                modify(props, [&](dynamic_global_property_object &p) {
+                modify(props, [&](dynamic_global_property_object& p) {
                     p.total_vesting_fund_steem += vesting_reward;
                     p.total_reward_fund_steem += content_reward;
                     p.current_supply += content_reward + witness_pay + vesting_reward;
                     p.virtual_supply += content_reward + witness_pay + vesting_reward;
                 });
             }
+
+            if (producer_reward)
+                push_virtual_operation(producer_reward_operation(wacc.name, *producer_reward));
         }
 
         void database::process_savings_withdraws() {
@@ -2511,47 +2523,15 @@ namespace golos { namespace chain {
             return reward;
         }
 
-        asset database::get_producer_reward() {
-            const auto &props = get_dynamic_global_properties();
-            static_assert(STEEMIT_BLOCK_INTERVAL ==
-                          3, "this code assumes a 3-second time interval");
+        asset database::get_producer_reward() const {
+            static_assert(STEEMIT_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval");
+            const auto& props = get_dynamic_global_properties();
             asset percent(protocol::calc_percent_reward_per_block<STEEMIT_PRODUCER_APR_PERCENT>(props.virtual_supply.amount), STEEM_SYMBOL);
 
-            const auto &witness_account = get_account(props.current_witness);
-
-            if (has_hardfork(STEEMIT_HARDFORK_0_16)) {
-                auto pay = std::max(percent, STEEMIT_MIN_PRODUCER_REWARD);
-
-                /// pay witness in vesting shares
-                if (props.head_block_number >=
-                    STEEMIT_START_MINER_VOTING_BLOCK ||
-                    (witness_account.vesting_shares.amount.value == 0)) {
-                    // const auto& witness_obj = get_witness( props.current_witness );
-                    create_vesting(witness_account, pay);
-                } else {
-                    modify(get_account(witness_account.name), [&](account_object &a) {
-                        a.balance += pay;
-                    });
-                }
-
-                return pay;
-            } else {
-                auto pay = std::max(percent, STEEMIT_MIN_PRODUCER_REWARD_PRE_HF_16);
-
-                /// pay witness in vesting shares
-                if (props.head_block_number >=
-                    STEEMIT_START_MINER_VOTING_BLOCK ||
-                    (witness_account.vesting_shares.amount.value == 0)) {
-                    // const auto& witness_obj = get_witness( props.current_witness );
-                    create_vesting(witness_account, pay);
-                } else {
-                    modify(get_account(witness_account.name), [&](account_object &a) {
-                        a.balance += pay;
-                    });
-                }
-
-                return pay;
-            }
+            // why this needed? the method called only before hf16
+            auto min_reward = has_hardfork(STEEMIT_HARDFORK_0_16) ? STEEMIT_MIN_PRODUCER_REWARD : STEEMIT_MIN_PRODUCER_REWARD_PRE_HF_16;
+            auto pay = std::max(percent, min_reward);
+            return pay;
         }
 
         asset database::get_pow_reward() const {

@@ -187,6 +187,14 @@ namespace golos { namespace protocol {
             asset reward;
         };
 
+        struct producer_reward_operation : public virtual_operation {
+            producer_reward_operation() {}
+            producer_reward_operation(const string& p, const asset& v) : producer(p), vesting_shares(v) {}
+
+            account_name_type producer;
+            asset             vesting_shares;
+        };
+
         struct return_vesting_delegation_operation: public virtual_operation {
             return_vesting_delegation_operation() {
             }
@@ -213,3 +221,4 @@ FC_REFLECT((golos::protocol::hardfork_operation), (hardfork_id))
 FC_REFLECT((golos::protocol::comment_payout_update_operation), (author)(permlink))
 FC_REFLECT((golos::protocol::comment_benefactor_reward_operation), (benefactor)(author)(permlink)(reward))
 FC_REFLECT((golos::protocol::return_vesting_delegation_operation), (account)(vesting_shares))
+FC_REFLECT((golos::protocol::producer_reward_operation), (producer)(vesting_shares))
