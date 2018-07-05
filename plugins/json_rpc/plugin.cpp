@@ -123,13 +123,6 @@ namespace golos {
                }
             }
 
-            void msg_pack::error(std::string message, fc::optional<fc::variant> data) {
-                error(JSON_RPC_SERVER_ERROR, std::move(message), std::move(data));
-            }
-
-            void msg_pack::error(const fc::exception &e) {
-                error(JSON_RPC_SERVER_ERROR, e);
-            }
 
             void msg_pack::error(int32_t code, const fc::exception &e) {
                 error(code, e.to_string(), fc::variant(*(e.dynamic_copy_exception())));
@@ -299,13 +292,13 @@ namespace golos {
                         msg.error(JSON_RPC_INVALID_PARAMS, e);
                         dump.error("invalid types");
                     } catch (const fc::exception& e) {
-                        msg.error(e);
+                        msg.error(JSON_RPC_INTERNAL_ERROR, e);
                         dump.error("invalid request");
                     } catch (const std::exception& e) {
-                        msg.error(e.what());
+                        msg.error(JSON_RPC_INTERNAL_ERROR, e.what());
                         dump.error(e.what());
                     } catch (...) {
-                        msg.error("Unknown error - parsing rpc message failed");
+                        msg.error(JSON_RPC_INTERNAL_ERROR, "Unknown error - parsing rpc message failed");
                         dump.error("unknown");
                     }
                 }

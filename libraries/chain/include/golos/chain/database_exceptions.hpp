@@ -2,46 +2,6 @@
 
 #include <golos/protocol/exceptions.hpp>
 
-#define STEEMIT_DECLARE_OP_BASE_EXCEPTIONS(op_name)                \
-   FC_DECLARE_DERIVED_EXCEPTION(                                      \
-      op_name ## _validate_exception,                                 \
-      golos::chain::operation_validate_exception,                  \
-      4040000 + 100 * protocol::operation::tag< protocol::op_name ## _operation >::value, \
-      #op_name "_operation validation exception"                      \
-      )                                                               \
-   FC_DECLARE_DERIVED_EXCEPTION(                                      \
-      op_name ## _evaluate_exception,                                 \
-      golos::chain::operation_evaluate_exception,                  \
-      4050000 + 100 * protocol::operation::tag< protocol::op_name ## _operation >::value, \
-      #op_name "_operation evaluation exception"                      \
-      )
-
-#define STEEMIT_DECLARE_OP_VALIDATE_EXCEPTION(exc_name, op_name, seqnum, msg) \
-   FC_DECLARE_DERIVED_EXCEPTION(                                      \
-      op_name ## _ ## exc_name,                                       \
-      golos::chain::op_name ## _validate_exception,                \
-      4040000 + 100 * protocol::operation::tag< protocol::op_name ## _operation >::value  \
-         + seqnum,                                                    \
-      msg                                                             \
-      )
-
-#define STEEMIT_DECLARE_OP_EVALUATE_EXCEPTION(exc_name, op_name, seqnum, msg) \
-   FC_DECLARE_DERIVED_EXCEPTION(                                      \
-      op_name ## _ ## exc_name,                                       \
-      golos::chain::op_name ## _evaluate_exception,                \
-      4050000 + 100 * protocol::operation::tag< protocol::op_name ## _operation >::value  \
-         + seqnum,                                                    \
-      msg                                                             \
-      )
-
-#define STEEMIT_DECLARE_INTERNAL_EXCEPTION(exc_name, seqnum, msg)  \
-   FC_DECLARE_DERIVED_EXCEPTION(                                      \
-      internal_ ## exc_name,                                          \
-      golos::chain::internal_exception,                            \
-      4990000 + seqnum,                                               \
-      msg                                                             \
-      )
-
 #define STEEMIT_TRY_NOTIFY(signal, ...)                                     \
    try                                                                        \
    {                                                                          \
@@ -66,18 +26,6 @@ namespace golos {
 
         FC_DECLARE_EXCEPTION(chain_exception, 4000000, "blockchain exception")
 
-        FC_DECLARE_DERIVED_EXCEPTION(database_query_exception, golos::chain::chain_exception, 4010000, "database query exception")
-
-        FC_DECLARE_DERIVED_EXCEPTION(block_validate_exception, golos::chain::chain_exception, 4020000, "block validation exception")
-
-        FC_DECLARE_DERIVED_EXCEPTION(transaction_exception, golos::chain::chain_exception, 4030000, "transaction validation exception")
-
-        FC_DECLARE_DERIVED_EXCEPTION(operation_validate_exception, golos::chain::chain_exception, 4040000, "operation validation exception")
-
-        FC_DECLARE_DERIVED_EXCEPTION(operation_evaluate_exception, golos::chain::chain_exception, 4050000, "operation evaluation exception")
-
-        FC_DECLARE_DERIVED_EXCEPTION(utility_exception, golos::chain::chain_exception, 4060000, "utility method exception")
-
         FC_DECLARE_DERIVED_EXCEPTION(undo_database_exception, golos::chain::chain_exception, 4070000, "undo database exception")
 
         FC_DECLARE_DERIVED_EXCEPTION(unlinkable_block_exception, golos::chain::chain_exception, 4080000, "unlinkable block")
@@ -89,27 +37,6 @@ namespace golos {
         FC_DECLARE_DERIVED_EXCEPTION(block_log_exception, golos::chain::chain_exception, 4110000, "block log exception")
 
         FC_DECLARE_DERIVED_EXCEPTION(pop_empty_chain, golos::chain::undo_database_exception, 4070001, "there are no blocks to pop")
-
-        STEEMIT_DECLARE_OP_BASE_EXCEPTIONS(transfer);
-//   STEEMIT_DECLARE_OP_EVALUATE_EXCEPTION( from_account_not_whitelisted, transfer, 1, "owner mismatch" )
-
-        STEEMIT_DECLARE_OP_BASE_EXCEPTIONS(account_create);
-
-        STEEMIT_DECLARE_OP_EVALUATE_EXCEPTION(max_auth_exceeded, account_create, 1, "Exceeds max authority fan-out")
-
-        STEEMIT_DECLARE_OP_EVALUATE_EXCEPTION(auth_account_not_found, account_create, 2, "Auth account not found")
-
-        STEEMIT_DECLARE_OP_BASE_EXCEPTIONS(account_update);
-
-        STEEMIT_DECLARE_OP_EVALUATE_EXCEPTION(max_auth_exceeded, account_update, 1, "Exceeds max authority fan-out")
-
-        STEEMIT_DECLARE_OP_EVALUATE_EXCEPTION(auth_account_not_found, account_update, 2, "Auth account not found")
-
-        FC_DECLARE_DERIVED_EXCEPTION(internal_exception, golos::chain::chain_exception, 4990000, "internal exception")
-
-        STEEMIT_DECLARE_INTERNAL_EXCEPTION(verify_auth_max_auth_exceeded, 1, "Exceeds max authority fan-out")
-
-        STEEMIT_DECLARE_INTERNAL_EXCEPTION(verify_auth_account_not_found, 2, "Auth account not found")
 
         FC_DECLARE_DERIVED_EXCEPTION(database_revision_exception, golos::chain::chain_exception, 4120000, "database revision exception")
 

@@ -80,11 +80,7 @@ namespace golos {
                 // Pass error to remote connection
                 void error(int32_t code, std::string message, fc::optional<fc::variant> data = fc::optional<fc::variant>());
 
-                void error(std::string message, fc::optional<fc::variant> data = fc::optional<fc::variant>());
-
                 void error(int32_t code, const fc::exception &);
-
-                void error(const fc::exception &);
 
                 fc::optional<std::string> error() const;
 
