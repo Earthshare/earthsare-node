@@ -1,4 +1,5 @@
 #include <golos/protocol/steem_operations.hpp>
+#include <golos/protocol/exceptions.hpp>
 #include <fc/io/json.hpp>
 
 namespace golos { namespace protocol {
@@ -13,7 +14,7 @@ namespace golos { namespace protocol {
         }
 
         inline void validate_account_name(const string &name) {
-            FC_ASSERT(is_valid_account_name(name), "Account name ${n} is invalid", ("n", name));
+            GOLOS_CHECK_VALUE(is_valid_account_name(name), "Account name ${name} is invalid", ("name", name));
         }
 
         inline void validate_account_json_metadata(const string& json_metadata) {
@@ -67,21 +68,28 @@ namespace golos { namespace protocol {
         }
 
         void comment_operation::validate() const {
-            FC_ASSERT(title.size() < 256, "Title larger than size limit");
-            FC_ASSERT(fc::is_utf8(title), "Title not formatted in UTF8");
-            FC_ASSERT(body.size() > 0, "Body is empty");
-            FC_ASSERT(fc::is_utf8(body), "Body not formatted in UTF8");
+            GOLOS_CHECK_PARAM(title, {
+                GOLOS_CHECK_VALUE(title.size() < 256, "Title larger than size limit");
+                GOLOS_CHECK_VALUE(fc::is_utf8(title), "Title not formatted in UTF8");
+            });
 
+            GOLOS_CHECK_PARAM(body, {
+                GOLOS_CHECK_VALUE(body.size() > 0, "Body is empty");
+                GOLOS_CHECK_VALUE(fc::is_utf8(body), "Body not formatted in UTF8");
+            });
 
             if (parent_author.size()) {
-                validate_account_name(parent_author);
+                GOLOS_CHECK_PARAM(parent_author, validate_account_name(parent_author));
             }
-            validate_account_name(author);
-            validate_permlink(parent_permlink);
-            validate_permlink(permlink);
+
+            GOLOS_CHECK_PARAM(author,          validate_account_name(author));
+            GOLOS_CHECK_PARAM(parent_permlink, validate_permlink(parent_permlink));
+            GOLOS_CHECK_PARAM(permlink,        validate_permlink(permlink));
 
             if (json_metadata.size() > 0) {
-                FC_ASSERT(fc::json::is_valid(json_metadata), "JSON Metadata not valid JSON");
+                GOLOS_CHECK_PARAM(json_metadata, {
+                    GOLOS_CHECK_VALUE(fc::json::is_valid(json_metadata), "JSON Metadata not valid JSON");
+                });
             }
         }
 

@@ -21,9 +21,100 @@ std::string wstring_to_utf8(const std::wstring &str) {
 
 #endif
 
+#define GOLOS_CHECK_OP_PARAM(OP, PARAM, VALIDATOR) \
+    FC_MULTILINE_MACRO_BEGIN \
+        try { \
+            VALIDATOR; \
+        } catch (const fc::exception& e) { \
+            FC_THROW_EXCEPTION(invalid_parameter, "Invalid value \"${value}\" for operation parameter \"${param}\": ${errmsg}", \
+                    ("param", FC_STRINGIZE(PARAM)) \
+                    ("value", OP.PARAM) \
+                    ("errmsg", e.to_string()) \
+                    ("error", e)); \
+        } \
+    FC_MULTILINE_MACRO_END
+
+#define GOLOS_CHECK_BALANCE( ACCOUNT, TYPE, REQUIRED ...) \
+    FC_EXPAND_MACRO( \
+        FC_MULTILINE_MACRO_BEGIN \
+            asset exist = get_balance(ACCOUNT, TYPE, (REQUIRED).symbol); \
+            if( UNLIKELY( exist < (REQUIRED) )) { \
+                FC_THROW_EXCEPTION( golos::insufficient_funds, \
+                        "Account \"${account}\" does not have enough ${balance}: exist ${exist}, required ${required}", \
+                        ("account",ACCOUNT.name)("balance",get_balance_name(TYPE))("exist",exist)("required",REQUIRED)); \
+            } \
+        FC_MULTILINE_MACRO_END \
+    )
+
+#define GOLOS_CHECK_BANDWIDTH(COND, TYPE, MSG, ...) \
+        GOLOS_ASSERT((COND), golos::bandwidth_exception, MSG, ("bandwidth",TYPE) __VA_ARGS__)
+
+#define GOLOS_CHECK_LOGIC(expr, TYPE, FORMAT, ...) \
+    if (!(expr)) { \
+        golos::logic_exception _E(FC_LOG_MESSAGE(error, FORMAT, ("err_id",TYPE)__VA_ARGS__)); \
+        _E.err_id = TYPE; \
+        throw _E; \
+    }
 
 namespace golos { namespace chain {
         using fc::uint128_t;
+
+    enum balance_type {
+        MAIN_BALANCE,
+        SAVINGS,
+        VESTING,
+        EFFECTIVE_VESTING,
+        HAVING_VESTING,
+        AVAILABLE_VESTING
+    };
+
+    asset get_balance(const account_object &account, balance_type type, asset_symbol_type symbol) {
+        switch(type) {
+            case MAIN_BALANCE:
+                switch (symbol) {
+                    case STEEM_SYMBOL:
+                        return account.balance;
+                    case SBD_SYMBOL:
+                        return account.sbd_balance;
+                    default:
+                        FC_ASSERT(false, "invalid symbol");
+                }
+            case SAVINGS:
+                switch (symbol) {
+                    case STEEM_SYMBOL:
+                        return account.savings_balance;
+                    case SBD_SYMBOL:
+                        return account.savings_sbd_balance;
+                    default:
+                        FC_ASSERT(false, "invalid symbol");
+                }
+            case VESTING: 
+                FC_ASSERT(symbol == VESTS_SYMBOL, "invalid symbol");
+                return account.vesting_shares;
+            case EFFECTIVE_VESTING: 
+                FC_ASSERT(symbol == VESTS_SYMBOL, "invalid symbol");
+                return account.effective_vesting_shares();
+            case HAVING_VESTING: 
+                FC_ASSERT(symbol == VESTS_SYMBOL, "invalid symbol");
+                return account.available_vesting_shares(false);
+            case AVAILABLE_VESTING: 
+                FC_ASSERT(symbol == VESTS_SYMBOL, "invalid symbol");
+                return account.available_vesting_shares(true);
+            default: FC_ASSERT(false, "invalid balance type");
+        }
+    }
+
+    std::string get_balance_name(balance_type type) {
+        switch(type) {
+            case MAIN_BALANCE: return "fund";
+            case SAVINGS: return "savings";
+            case VESTING: return "vesting shares";
+            case EFFECTIVE_VESTING: return "effective vesting shares";
+            case HAVING_VESTING: return "having vesting shares";
+            case AVAILABLE_VESTING: return "available vesting shares";
+            default: FC_ASSERT(false, "invalid balance type");
+        }
+    }
 
         inline void validate_permlink_0_1(const string &permlink) {
             FC_ASSERT(permlink.size() > STEEMIT_MIN_PERMLINK_LENGTH &&
@@ -71,8 +162,8 @@ namespace golos { namespace chain {
                     case '-':
                         break;
                     default:
-                        FC_ASSERT(false, "Invalid permlink character: ${s}", ("s",
-                                std::string() + c));
+                        FC_THROW_EXCEPTION(invalid_value, "Invalid permlink character: ${s}", 
+                                ("s", std::string() + c));
                 }
             }
         }
@@ -513,11 +604,19 @@ namespace golos { namespace chain {
 
                     if (_db.has_hardfork(STEEMIT_HARDFORK_0_12__176)) {
                         if (o.parent_author == STEEMIT_ROOT_POST_PARENT)
-                            FC_ASSERT((now - band->last_bandwidth_update) >
-                                      STEEMIT_MIN_ROOT_COMMENT_INTERVAL, "You may only post once every 5 minutes.", ("now", now)("last_root_post", band->last_bandwidth_update));
+                            GOLOS_CHECK_BANDWIDTH((now - band->last_bandwidth_update) > STEEMIT_MIN_ROOT_COMMENT_INTERVAL,
+                                    golos::bandwidth_exception::post_bandwidth,
+                                    "You may only post once every 5 minutes.", 
+                                    ("now", now)
+                                    ("last", band->last_bandwidth_update)
+                                    ("next", band->last_bandwidth_update + STEEMIT_MIN_ROOT_COMMENT_INTERVAL));
                         else
-                            FC_ASSERT((now - auth.last_post) >
-                                      STEEMIT_MIN_REPLY_INTERVAL, "You may only comment once every 20 seconds.", ("now", now)("auth.last_post", auth.last_post));
+                            GOLOS_CHECK_BANDWIDTH((now - auth.last_post) > STEEMIT_MIN_REPLY_INTERVAL, 
+                                    golos::bandwidth_exception::comment_bandwidth,
+                                    "You may only comment once every 20 seconds.", 
+                                    ("now", now)
+                                    ("last", auth.last_post)
+                                    ("next", auth.last_post + STEEMIT_MIN_REPLY_INTERVAL));
                     } else if (_db.has_hardfork(STEEMIT_HARDFORK_0_6__113)) {
                         if (o.parent_author == STEEMIT_ROOT_POST_PARENT)
                             FC_ASSERT((now - auth.last_post) >
@@ -564,8 +663,8 @@ namespace golos { namespace chain {
 
                     const auto &new_comment = _db.create<comment_object>([&](comment_object &com) {
                         if (_db.has_hardfork(STEEMIT_HARDFORK_0_1)) {
-                            validate_permlink_0_1(o.parent_permlink);
-                            validate_permlink_0_1(o.permlink);
+                            GOLOS_CHECK_OP_PARAM(o, parent_permlink, validate_permlink_0_1(o.parent_permlink));
+                            GOLOS_CHECK_OP_PARAM(o, permlink,        validate_permlink_0_1(o.permlink));
                         }
 
                         com.author = o.author;
@@ -650,15 +749,12 @@ namespace golos { namespace chain {
                         com.active = com.last_update;
                         strcmp_equal equal;
 
-                        if (!parent) {
-                            FC_ASSERT(com.parent_author ==
-                                      account_name_type(), "The parent of a comment cannot change.");
-                            FC_ASSERT(equal(com.parent_permlink, o.parent_permlink), "The permlink of a comment cannot change.");
-                        } else {
-                            FC_ASSERT(com.parent_author ==
-                                      o.parent_author, "The parent of a comment cannot change.");
-                            FC_ASSERT(equal(com.parent_permlink, o.parent_permlink), "The permlink of a comment cannot change.");
-                        }
+                        GOLOS_CHECK_LOGIC(com.parent_author == (parent ? o.parent_author : account_name_type()),
+                                logic_exception::parent_of_comment_cannot_change,
+                                "The parent of a comment cannot change.");
+                        GOLOS_CHECK_LOGIC(equal(com.parent_permlink, o.parent_permlink),
+                                logic_exception::parent_perlink_of_comment_cannot_change,
+                                "The parent permlink of a comment cannot change.");
 
                     });
 #ifndef IS_LOW_MEM
@@ -888,8 +984,8 @@ namespace golos { namespace chain {
                 });
             }
 
-            FC_ASSERT(_db.get_balance(from_account, o.amount.symbol) >=
-                      o.amount, "Account does not have sufficient funds for transfer.");
+            GOLOS_CHECK_BALANCE(from_account, MAIN_BALANCE, o.amount); 
+
             _db.adjust_balance(from_account, -o.amount);
             _db.adjust_balance(to_account, o.amount);
         }
@@ -2086,8 +2182,8 @@ namespace golos { namespace chain {
             database &_db = db();
             const auto &from = _db.get_account(op.from);
             const auto &to = _db.get_account(op.to);
-            FC_ASSERT(_db.get_balance(from, op.amount.symbol) >=
-                      op.amount, "Account does not have sufficient funds to transfer to savings.");
+
+            GOLOS_CHECK_BALANCE(from, MAIN_BALANCE, op.amount);
 
             _db.adjust_balance(from, -op.amount);
             _db.adjust_savings_balance(to, op.amount);
@@ -2098,11 +2194,13 @@ namespace golos { namespace chain {
             const auto &from = _db.get_account(op.from);
             _db.get_account(op.to); // Verify to account exists
 
-            FC_ASSERT(from.savings_withdraw_requests <
-                      STEEMIT_SAVINGS_WITHDRAW_REQUEST_LIMIT, "Account has reached limit for pending withdraw requests.");
+            GOLOS_CHECK_LOGIC(from.savings_withdraw_requests < STEEMIT_SAVINGS_WITHDRAW_REQUEST_LIMIT, 
+                    golos::logic_exception::reached_limit_for_pending_withdraw_requests,
+                    "Account has reached limit for pending withdraw requests.",
+                    ("limit",STEEMIT_SAVINGS_WITHDRAW_REQUEST_LIMIT));
 
-            FC_ASSERT(_db.get_savings_balance(from, op.amount.symbol) >=
-                      op.amount);
+            GOLOS_CHECK_BALANCE(from, SAVINGS, op.amount);
+
             _db.adjust_savings_balance(from, -op.amount);
             _db.create<savings_withdraw_object>([&](savings_withdraw_object &s) {
                 s.from = op.from;

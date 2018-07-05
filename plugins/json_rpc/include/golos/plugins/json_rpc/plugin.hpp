@@ -52,6 +52,10 @@
 #define JSON_RPC_NO_PARAMS          (-32001)
 #define JSON_RPC_PARSE_PARAMS_ERROR (-32002)
 #define JSON_RPC_ERROR_DURING_CALL  (-32003)
+#define JSON_RPC_INSUFFICIENT_FUNDS (-32004)
+#define JSON_RPC_MISSING_AUTHORITY  (-32005)
+#define JSON_RPC_MISSING_OBJECT     (-32006)
+#define JSON_RPC_LOGIC_ERROR        (-32007)
 
 namespace golos {
     namespace plugins {

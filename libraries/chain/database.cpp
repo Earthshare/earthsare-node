@@ -587,7 +587,12 @@ namespace golos { namespace chain {
         const account_object &database::get_account(const account_name_type &name) const {
             try {
                 return get<account_object, by_name>(name);
-            } FC_CAPTURE_AND_RETHROW((name))
+            } catch(const std::out_of_range &e) {
+                //GOLOS_THROW_MISSING_OBJECT("account", name);
+                GOLOS_ASSERT(false, missing_object, "Missing ${type} with id \"${id}\"",
+                        ("type","account")("id",name));
+            }
+            FC_CAPTURE_AND_RETHROW((name))
         }
 
         const account_object *database::find_account(const account_name_type &name) const {
@@ -3619,6 +3624,12 @@ namespace golos { namespace chain {
                     try {
                         apply_operation(op);
                         ++_current_op_in_trx;
+                    } catch(const fc::exception& e) {
+                        FC_THROW_EXCEPTION(tx_invalid_operation,
+                                "Invalid operation ${index} in transaction: ${errmsg}",
+                                ("index", _current_op_in_trx)
+                                ("errmsg", e.to_string())
+                                ("error", e));
                     } FC_CAPTURE_AND_RETHROW((op));
                 }
                 _current_trx_id = transaction_id_type();

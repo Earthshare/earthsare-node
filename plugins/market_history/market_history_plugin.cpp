@@ -5,10 +5,28 @@
 #include <golos/chain/steem_objects.hpp>
 #include <golos/chain/account_object.hpp>
 
+#include <golos/protocol/exceptions.hpp>
+
 
 
 #define CHECK_ARG_SIZE(s) \
-   FC_ASSERT( args.args->size() == s, "Expected #s argument(s), was ${n}", ("n", args.args->size()) );
+   FC_ASSERT( args.args->size() == s, "Expected "#s" argument(s), was ${n}", ("n", args.args->size()) );
+
+#define GOLOS_CHECK_LIMIT(limit, max_value) \
+    GOLOS_ASSERT( limit <= max_value, golos::limit_too_large, "Exceeded limit value. Maximum allowed ${max}", \
+            ("limit",limit)("max",max_value))
+
+#define GOLOS_DECLARE_PARAM(PARAM, GETTER) auto (PARAM) = [&]() {\
+    try {return (GETTER);} \
+    catch (const fc::exception &e) { \
+        FC_THROW_EXCEPTION(golos::invalid_parameter, \
+            "Invalid parameter \"${name}\": ${reason}", \
+            ("param", BOOST_PP_STRINGIZE(PARAM)) \
+            ("errmsg", e.to_string()) \
+            ("error", e) \
+            ); \
+    } \
+}()
 
 
 namespace golos {
@@ -223,7 +241,7 @@ namespace golos {
             }
 
             order_book market_history_plugin::market_history_plugin_impl::get_order_book(uint32_t limit) const {
-                FC_ASSERT(limit <= 500);
+                GOLOS_CHECK_PARAM(limit, GOLOS_CHECK_LIMIT(limit, 500));
 
                 const auto &order_idx = database().get_index<golos::chain::limit_order_index>().indices().get<golos::chain::by_price>();
                 auto itr = order_idx.lower_bound(price::max(SBD_SYMBOL, STEEM_SYMBOL));
@@ -465,7 +483,7 @@ namespace golos {
 
             DEFINE_API(market_history_plugin, get_order_book) {
                 CHECK_ARG_SIZE(1)
-                auto limit = args.args->at(0).as<uint32_t>();
+                GOLOS_DECLARE_PARAM(limit, args.args->at(0).as<uint32_t>());
                 auto &db = _my->database();
                 return db.with_weak_read_lock([&]() {
                     return _my->get_order_book(limit);
@@ -521,10 +539,12 @@ namespace golos {
             }
 
             DEFINE_API(market_history_plugin, get_open_orders) {
-                auto tmp = args.args->at(0).as<string>();
+                CHECK_ARG_SIZE(1);
+                GOLOS_DECLARE_PARAM(account, args.args->at(0).as<string>());
+                //auto tmp = args.args->at(0).as<string>();
                 auto &db = _my->database();
                 return db.with_weak_read_lock([&]() {
-                    return _my->get_open_orders(tmp);
+                    return _my->get_open_orders(account);
                 });
             }
 

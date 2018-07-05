@@ -1,6 +1,8 @@
 #include <golos/plugins/json_rpc/plugin.hpp>
 #include <golos/plugins/json_rpc/utility.hpp>
 
+#include <golos/protocol/exceptions.hpp>
+
 #include <boost/algorithm/string.hpp>
 
 #include <fc/log/logger_config.hpp>
@@ -285,6 +287,16 @@ namespace golos {
 
                     try {
                         rpc_jsonrpc(data.get_object(), msg);
+
+                    } catch (const golos::insufficient_funds& e) {
+                        msg.error(JSON_RPC_INSUFFICIENT_FUNDS, e);
+                    } catch (const golos::protocol::tx_missing_authority& e) {
+                        msg.error(JSON_RPC_MISSING_AUTHORITY, e);
+                    } catch (const golos::missing_object& e) {
+                        msg.error(JSON_RPC_MISSING_OBJECT, e);
+                    } catch (const golos::logic_exception& e) {
+                        msg.error(JSON_RPC_LOGIC_ERROR, e);
+
                     } catch (const fc::parse_error_exception& e) {
                         msg.error(JSON_RPC_INVALID_PARAMS, e);
                         dump.error("invalid params");
