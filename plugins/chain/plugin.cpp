@@ -59,6 +59,8 @@ namespace chain {
 
         std::vector<std::string> accounts_to_store_metadata;
 
+        bool store_memo_in_savings_withdraws = true;
+
         plugin_impl() {
             // get default settings
             read_wait_micro = db.read_wait_micro();
@@ -242,6 +244,9 @@ namespace chain {
             ) (
                 "store-account-metadata-list", boost::program_options::value<std::string>(),
                 "names of accounts to store metadata"
+            ) (
+                "store-memo-in-savings-withdraws", boost::program_options::bool_switch()->default_value(true),
+                "store memo for all savings withdraws"
             );
         cli.add_options()
             (
@@ -340,6 +345,8 @@ namespace chain {
                     " because store-account-metadata is false");
             }
         }
+
+        my->store_memo_in_savings_withdraws = options.at("store-memo-in-savings-withdraws").as<bool>();
     }
 
     void plugin::plugin_startup() {
@@ -369,6 +376,8 @@ namespace chain {
         my->db.set_store_account_metadata(my->store_account_metadata);
 
         my->db.set_accounts_to_store_metadata(my->accounts_to_store_metadata);
+
+        my->db.set_store_memo_in_savings_withdraws(my->store_memo_in_savings_withdraws);
 
         if(my->skip_virtual_ops) {
             my->db.set_skip_virtual_ops();
